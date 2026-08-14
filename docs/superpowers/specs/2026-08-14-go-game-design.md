@@ -42,18 +42,20 @@ and (optionally) sound.py depend on pygame. This keeps all logic headless-testab
 
 ## Rules Engine (gameboard.py)
 
-Board: 19x19 `grid[x][y]` (x first) with `None`/`'X'`/`'O'`.
+Board: 19x19 `grid[x][y]` (x first) with `None`/`'X'`/`'O'`. `GameBoard.__init__(size=19)`
+accepts a size so `game.py`'s `board_size` and the underlying board size can't drift apart.
 
 - `is_legal(player, x, y) -> bool`: real Go legality —
   1. in bounds, empty
   2. simulate placement, remove opponent groups that lose all liberties (capture)
   3. the placed stone's **connected group** has >= 1 liberty; otherwise illegal (suicide)
   4. ko: the resulting board position must not equal the position 1-ago (simple ko).
-- `make_move(player, x, y) -> (ok: bool, captured: int)`:
+- `make_move(player, x, y) -> (ok: bool, captured: int)`: public move path.
   - if illegal, return False
   - place, capture opponent groups with 0 liberties, return True + count
-- `capture_stones` returns list of captured coords; **`place_stone`/`make_move` calls
-  `player.increment_captured_stones(len(captured))`** (fixes scoring bug).
+- `capture_stones` returns list of captured coords and increments the mover's
+  `increment_captured_stones(len(captured))` (fixes scoring bug). `place_stone`
+  delegates to `make_move` so there is exactly one capture/scoring path.
 - `find_groups(color) -> list of groups` (each a list of coords).
 - `liberties_of(coords) -> int`.
 - `board_key() -> hashable` for ko/history (tuple of tuples).
@@ -69,10 +71,13 @@ Board: 19x19 `grid[x][y]` (x first) with `None`/`'X'`/`'O'`.
 - `state`: `current_player`, `passes`, `game_over`, `komi`.
 - `setup(handicap=0)`: place handicap stones on star points if requested; set komi
   (6.5 normal, 0 when handicap>0).
-- `play(x, y)`: board.make_move for current player; on success record to history (for
-  undo + SGF), maybe capture+placing triggers reload. Switch turn.
+- `play(x, y)`: `board.make_move` for current player; on success, record the move and the
+  full board snapshot to history (powers undo + SGF), then switch turn.
 - `pass_move()`: increments `passes`; two consecutive passes -> `finish()`.
-- `finish()`: compute Chinese (area) score, returns `(black_score, white_score, winner)`.
+- `finish()`: compute Chinese (area) score, returns
+  `(black_area, white_area, winner)` where winner `'X'`/`'O'`/`'draw'` after applying
+  komi (white's area + komi). Dead stones are simply left on board for area counting
+  (Chinese rule counts placed stones + enclosed empties).
 - `undo()`: pop last move from history and revert board (restores captures via
   history snapshots of full board state, simplest and robust; board up to 361 cells won't
   be a memory concern).
@@ -82,8 +87,10 @@ Board: 19x19 `grid[x][y]` (x first) with `None`/`'X'`/`'O'`.
 ## AI (ai.py)
 - `choose_move(game) -> (x, y)` given current board.
 - RandomAI: choose uniformly from legal empties (may pass if none).
-- GreedyAI: for each legal candidate play it via copy, use a small embedded
-  heuristic: maximize `(area gain - komi) + captures led`, pick best; tie -> random.
+- GreedyAI: for each legal candidate, simulate it on a copied board and score it with a
+  tiny heuristic: `area_gain(x,y) + 2*captures - 1*landing_liberty_loss`; pick the best;
+  ties broken randomly. For the mover (color aware) it favors capturing and territory,
+  avoiding self-atari.
 - No mini-max / no external engine. Difficulty = which strategy.
 - AI is `injected`; `Game.take_turn()` uses it when `not is_human`.
 
@@ -119,7 +126,7 @@ Rewrite the two existing files; add:
 capture-over move allowed, scoring, ko enforced, captured counting, handicap placement.
 `test_player.py`: contract, captures increment correctness.
 **new** `test_game.py`: turn alternation, pass logic, two-pass finish, undo
-(move+no-capture step, scoring, komi, handicap.
+(no-capture move and capture move each), scoring + komi, handicap, game-over flag.
 **new** `test_ai.py`: greedy picks capture over, random stays in bounds/legal.
 **new** `test_sgf.py`: round-trip equality of move records.
 
