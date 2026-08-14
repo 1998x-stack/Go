@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import pygame
 from constants import Constants
@@ -8,7 +9,7 @@ from event_handler import click_to_point, handle_key
 from sgf import game_to_sgf, sgf_to_game
 
 
-def main():
+async def main():
     pygame.init()
     cell = 30
     margin = Constants.MARGIN
@@ -29,7 +30,6 @@ def main():
         snd = Sound()
     except Exception:
         snd = None
-    clock = pygame.time.Clock()
     msg = ''
     running = True
 
@@ -72,7 +72,7 @@ def main():
         # AI responds when it's not the human's turn
         if not game.state['game_over'] and game.state['current'] != human:
             mv = ai.choose(game)
-            pygame.time.wait(200)
+            await asyncio.sleep(0.1)
             if mv is None:
                 game.pass_move()
                 msg = 'AI passed'
@@ -82,11 +82,11 @@ def main():
 
         renderer.render(msg)
         pygame.display.flip()
-        clock.tick(30)
+        await asyncio.sleep(0)      # yield to the browser event loop
 
     pygame.quit()
     sys.exit(0)
 
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go — Play the game of Go in your browser</title>
+<style>
+  :root {
+    --ink: #1f2430;
+    --muted: #5a6270;
+    --accent: #b45309;
+    --accent-dark: #92400e;
+    --bg: #ffffff;
+    --soft: #f5f1ea;
+    --line: #e5ddd0;
+    --sans: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Times New Roman", serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.6;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Hero */
+  .hero {
+    background: linear-gradient(135deg, #2a2f3a 0%, #1f2430 100%);
+    color: #fff;
+    padding: 72px 24px 64px;
+    text-align: center;
+  }
+  .hero h1 { font-family: var(--serif); font-size: 52px; margin: 0 0 8px; letter-spacing: 1px; }
+  .hero .sub { font-family: var(--serif); font-size: 22px; color: #e8c79a; font-style: italic; margin: 0 0 20px; }
+  .hero p.tag { max-width: 620px; margin: 0 auto 28px; color: #d3d9e3; }
+  .btn {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff !important;
+    padding: 14px 30px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 17px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.25);
+  }
+  .btn:hover { background: var(--accent-dark); text-decoration: none; }
+
+  .wrap { max-width: 960px; margin: 0 auto; padding: 48px 24px; }
+
+  /* Sections */
+  section h2 {
+    font-family: var(--serif);
+    font-size: 30px;
+    margin: 0 0 20px;
+    color: var(--accent-dark);
+  }
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 16px; margin-top: 8px; }
+  .card { background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  .card h3 { margin: 0 0 6px; color: var(--ink); font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+
+  /* Playable frame */
+  .game-frame {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(0,0,0,.08);
+  }
+  .game-frame iframe { width: 100%; height: 640px; border: 0; display: block; }
+  .hint { color: var(--muted); font-size: 14px; margin-top: 10px; text-align: center; }
+
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 18px; }
+  .shots figure { margin: 0; }
+  .shots img { width: 100%; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+  .shots figcaption { color: var(--muted); font-size: 13px; margin-top: 6px; text-align: center; }
+
+  pre {
+    background: #20242b;
+    color: #e8e8ea;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 13.5px;
+  }
+  .steps li { margin-bottom: 6px; color: var(--muted); }
+
+  footer { border-top: 1px solid var(--line); color: var(--muted); text-align: center; padding: 26px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+  <header class="hero">
+    <h1>Go · 囲碁</h1>
+    <p class="sub">The classic game of territory, capture, and strategy</p>
+    <p class="tag">
+      A faithful 19×19 Go implementation with correct rules — Ko, suicide, capture and
+      Chinese-area scoring — facing a built-in AI. Play it right here.
+    </p>
+    <a class="btn" href="#play">Play the game</a>
+  </header>
+
+  <div class="wrap">
+
+    <section id="play">
+      <h2>Play in your browser</h2>
+      <div class="game-frame">
+        <iframe src="game.html" title="Play Go" allow="autoplay; pointer-lock"></iframe>
+      </div>
+      <p class="hint">You play <strong>Black</strong> and move first. Press <strong>P</strong> to pass, <strong>U</strong> to undo, <strong>G</strong> to end and score.</p>
+    </section>
+
+    <section>
+      <h2>Highlights</h2>
+      <div class="features">
+        <div class="card"><h3>Correct rules</h3><p>Capture-aware &amp; group-aware suicide checks, plus the Ko rule via position history.</p></div>
+        <div class="card"><h3>Built-in AI</h3><p>A Greedy opponent seeking territory and captures — or pick Random for a relaxed game.</p></div>
+        <div class="card"><h3>Chinese scoring</h3><p>Area scoring with komi; handicap supported with zero komi.</p></div>
+        <div class="card"><h3>Undo &amp; SGF</h3><p>Take back moves and save / load standard SGF game records.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Screenshots</h2>
+      <div class="shots">
+        <figure><img src="arc.png" alt="Board rendering 1"><figcaption>On the board</figcaption></figure>
+        <figure><img src="arch.png" alt="Board rendering 2"><figcaption>Mid-game position</figcaption></figure>
+      </div>
+    </section>
+
+    <section>
+      <h2>Run it on your desktop</h2>
+      <pre>python3 -m venv .venv
+source .venv/bin/activate
+pip install pygame
+python main.py</pre>
+      <div class="steps">
+        <p>Requires <strong>Python 3.9+</strong> and pygame. See the project README for full controls and testing instructions.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>How to play</h2>
+      <p style="color: var(--muted)">
+        Place stones of your color on the 19×19 intersection grid. Stones connect into groups;
+        a group with no empty liberties is captured. You cannot play into suicide unless the move
+        captures. The game ends after two consecutive passes, and the Chinese-area score (with
+        komi) decides the winner.
+      </p>
+    </section>
+
+  </div>
+
+  <footer>
+    A Python + pygame Go game · built with an open, headlessly-tested rules engine · <a href="https://en.wikipedia.org/wiki/Go_(game)">About Go</a>
+  </footer>
+</body>
+</html>
