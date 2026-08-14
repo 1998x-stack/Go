@@ -23,6 +23,12 @@ def main():
     human = 'X'
     origin = (margin, margin)
     renderer = Renderer(screen, game, origin, cell)
+    # optional sound: never allowed to crash the game
+    try:
+        from sound import Sound
+        snd = Sound()
+    except Exception:
+        snd = None
     clock = pygame.time.Clock()
     msg = ''
     running = True
@@ -60,6 +66,8 @@ def main():
                 if pt and game.state['current'] == human and not game.state['game_over']:
                     ok, text = game.play(pt[0], pt[1])
                     msg = text if ok else 'Illegal move'
+                    if ok and snd is not None:
+                        snd.play_sound_effect('place.wav')
 
         # AI responds when it's not the human's turn
         if not game.state['game_over'] and game.state['current'] != human:
