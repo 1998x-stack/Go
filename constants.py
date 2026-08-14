@@ -1,23 +1,23 @@
 class Constants:
-    """Constants used throughout the Go game."""
+    """Shared constants for the Go game."""
 
-    # Board dimensions
-    BOARD_SIZE = 19  # The Go board is 19x19
+    BOARD_SIZE = 19
+    MARGIN = 24
+    STONE_RADIUS = 14
+    DEFAULT_KOMI = 6.5
 
-    # Screen dimensions
-    SCREEN_WIDTH = 600
-    SCREEN_HEIGHT = 600
-    SCREEN_SIZE = (SCREEN_WIDTH, SCREEN_HEIGHT)
+    # 9 star points on a 19x19 board, as (x, y)
+    STAR_POINTS = [
+        (3, 3), (9, 3), (15, 3),
+        (3, 9), (9, 9), (15, 9),
+        (3, 15), (9, 15), (15, 15),
+    ]
 
-    # Colors
     COLORS = {
-        'background': (255, 255, 255),  # White background
-        'grid': (0, 0, 0),              # Black grid lines
-        'black_stone': (0, 0, 0),       # Black stones
-        'white_stone': (255, 255, 255), # White stones
+        'background': (222, 184, 135),
+        'grid': (60, 40, 20),
+        'black_stone': (20, 20, 20),
+        'white_stone': (245, 245, 245),
+        'text': (30, 30, 30),
+        'accent': (200, 30, 30),
     }
-
-    # Other game settings
-    STONE_RADIUS = 14  # Radius of the stones when drawn on the board
-    GRID_LINE_WIDTH = 2  # Width of the grid lines
-    MARGIN = 20  # Margin from the edge of the window to the grid
