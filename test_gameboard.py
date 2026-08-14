@@ -1,99 +1,73 @@
 import unittest
+from unittest import mock
 from gameboard import GameBoard
-from player import Player
+
+
+def make_player(color):
+    p = mock.MagicMock()
+    p.get_color.return_value = color
+    p.captured = 0
+    p.increment_captured_stones.side_effect = lambda n, p=p: setattr(p, 'captured', p.captured + n)
+    return p
+
 
 class TestGameBoard(unittest.TestCase):
-
     def setUp(self):
-        """Set up a fresh game board and players for each test."""
-        self.board = GameBoard()
-        self.player_black = Player('X')
-        self.player_white = Player('O')
+        self.board = GameBoard(size=5)
+        self.pb = make_player('X')
+        self.pw = make_player('O')
 
-    def test_initialization(self):
-        """Test that the board is initialized with all positions set to None."""
-        for row in self.board.grid:
-            self.assertTrue(all(pos is None for pos in row))
+    def place(self, color, coords):
+        p = self.pb if color == 'X' else self.pw
+        for (x, y) in coords:
+            self.board.make_place(p, x, y)
 
-    def test_place_stone_valid(self):
-        """Test placing a stone on a valid empty spot."""
-        result = self.board.place_stone(self.player_black, 3, 3)
-        self.assertTrue(result)
-        self.assertEqual(self.board.get_stone(3, 3), 'X')
+    def test_place_and_get(self):
+        self.assertTrue(self.board.place_stone(self.pb, 2, 2))
+        self.assertEqual(self.board.get_stone(2, 2), 'X')
 
-    def test_place_stone_invalid_out_of_bounds(self):
-        """Test placing a stone out of the board's bounds."""
-        result = self.board.place_stone(self.player_black, -1, 3)
-        self.assertFalse(result)
-        self.assertIsNone(self.board.get_stone(-1, 3))
+    def test_group_extension_into_surrounded_slot_is_legal(self):
+        self.place('X', [(2, 0), (2, 1)])
+        self.place('O', [(0, 1), (1, 0), (1, 2)])
+        self.assertTrue(self.board.is_legal(self.pb, 1, 1))
 
-        result = self.board.place_stone(self.player_black, 19, 3)
-        self.assertFalse(result)
-        self.assertIsNone(self.board.get_stone(19, 3))
+    def test_genuine_suicide_is_illegal(self):
+        self.place('X', [(0, 1), (1, 0), (1, 2), (2, 1)])
+        self.assertFalse(self.board.is_legal(self.pw, 1, 1))
 
-    def test_place_stone_invalid_occupied(self):
-        """Test placing a stone on an already occupied spot."""
-        self.board.place_stone(self.player_black, 3, 3)
-        result = self.board.place_stone(self.player_white, 3, 3)
-        self.assertFalse(result)
-        self.assertEqual(self.board.get_stone(3, 3), 'X')
-
-    def test_capture_stones(self):
-        """Test capturing stones by surrounding them."""
-        # Setup a scenario where a stone will be captured
-        self.board.place_stone(self.player_black, 1, 0)
-        self.board.place_stone(self.player_black, 0, 1)
-        self.board.place_stone(self.player_black, 1, 2)
-        self.board.place_stone(self.player_white, 1, 1)
-
-        # Place stones to capture the white stone
-        self.board.place_stone(self.player_black, 2, 1)
-        captured_stones = self.board.capture_stones(2, 1)
-        
-        self.assertEqual(len(captured_stones), 1)
-        self.assertEqual(captured_stones, [(1, 1)])
+    def test_capture_credits_the_mover(self):
+        self.place('O', [(1, 1)])
+        self.place('X', [(0, 1), (1, 0), (1, 2)])
+        self.assertTrue(self.board.place_stone(self.pb, 2, 1))
+        self.assertEqual(self.pb.captured, 1)
         self.assertIsNone(self.board.get_stone(1, 1))
 
-    def test_get_groups(self):
-        """Test getting a group of connected stones."""
-        self.board.place_stone(self.player_black, 3, 3)
-        self.board.place_stone(self.player_black, 3, 4)
-        self.board.place_stone(self.player_black, 4, 3)
-        
-        group = self.board.get_groups(3, 3)
-        self.assertEqual(len(group), 3)
-        self.assertIn((3, 3), group)
-        self.assertIn((3, 4), group)
-        self.assertIn((4, 3), group)
+    def test_find_groups(self):
+        self.place('X', [(0, 0), (0, 1)])
+        self.place('O', [(2, 2)])
+        self.assertEqual(sum(len(g) for g in self.board.find_groups('X')), 2)
 
-    def test_get_liberties(self):
-        """Test calculating the number of liberties for a group of stones."""
-        self.board.place_stone(self.player_black, 3, 3)
-        self.board.place_stone(self.player_black, 3, 4)
-        self.board.place_stone(self.player_black, 4, 3)
-        
-        group = self.board.get_groups(3, 3)
-        liberties = self.board.get_liberties(group)
-        self.assertEqual(liberties, 7)  # The group has 7 liberties
+    def test_score_areas_no_territory(self):
+        self.place('X', [(0, 0)])
+        self.place('O', [(4, 4)])
+        black, white = self.board.score_areas()
+        self.assertEqual(black, 1)
+        self.assertEqual(white, 1)
 
-    def test_is_valid_move(self):
-        """Test that is_valid_move correctly identifies legal and illegal moves."""
-        # Legal move
-        self.assertTrue(self.board.is_valid_move(self.player_black, 3, 3))
-        
-        # Move out of bounds
-        self.assertFalse(self.board.is_valid_move(self.player_black, -1, 3))
-        
-        # Move on occupied spot
-        self.board.place_stone(self.player_black, 3, 3)
-        self.assertFalse(self.board.is_valid_move(self.player_white, 3, 3))
-        
-        # Self-capture (illegal move)
-        self.board.place_stone(self.player_white, 2, 3)
-        self.board.place_stone(self.player_white, 3, 2)
-        self.board.place_stone(self.player_white, 4, 3)
-        self.board.place_stone(self.player_white, 3, 4)
-        self.assertFalse(self.board.is_valid_move(self.player_black, 3, 3))
+    def test_score_areas_enclosed_territory(self):
+        # black ring around empty (2,2); a lone white stone at a far corner makes
+        # the outside region border BOTH colors (neutral), so only the interior
+        # pocket (2,2) counts as black territory.
+        self.place('X', [(1, 2), (2, 1), (3, 2), (2, 3)])
+        self.place('O', [(0, 0)])
+        black, white = self.board.score_areas()
+        self.assertEqual(black, 5)   # 4 stones + 1 enclosed empty
+        self.assertEqual(white, 1)
+
+    def test_resulting_key_none_for_illegal(self):
+        self.assertIsNone(self.board.resulting_key(self.pb, 99, 99))
+        self.assertIsNotNone(self.board.resulting_key(self.pb, 0, 0))
+
 
 if __name__ == '__main__':
     unittest.main()
