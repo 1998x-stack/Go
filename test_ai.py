@@ -58,6 +58,38 @@ class TestPruning(unittest.TestCase):
         self.assertTrue(pts)
         self.assertTrue(all(g.can_play(x, y) for (x, y) in pts))
 
+    def test_pruning_retains_capturing_move(self):
+        # X(2,3) X(4,3) X(3,2) surround O(3,3), leaving (3,4) as its only
+        # liberty. Playing X at (3,4) captures the O stone, which is adjacent
+        # to the opponent and must be retained by pruning.
+        g = Game()
+        moves = [(2, 3), (3, 3), (4, 3), (15, 15), (3, 2), (15, 14)]
+        for (x, y) in moves:
+            ok, _ = g.play(x, y)
+            self.assertTrue(ok, msg='setup move (x,y)=' + str((x, y)))
+        self.assertEqual(g.state['current'], 'X')
+
+        capture = (3, 4)
+        pts = GreedyAI()._candidates(g)
+        self.assertIn(capture, pts)
+
+        # Confirm it is genuinely a capturing move (regression guard).
+        from gameboard import GameBoard
+        from player import Player
+        sim = GameBoard(g.size)
+        sim.grid = [row[:] for row in g.board.grid]
+        tmp = Player('X')
+        self.assertTrue(sim.place_stone(tmp, capture[0], capture[1]))
+        self.assertEqual(tmp.captured_stones, 1)
+
+    def test_candidates_are_deterministic_order(self):
+        g = Game()
+        g.play(3, 3)
+        g.play(16, 16)
+        pts = GreedyAI()._candidates(g)
+        self.assertEqual(pts, sorted(pts, key=lambda p: (p[0], p[1])))
+        self.assertEqual(pts, GreedyAI()._candidates(g))
+
 
 class TestSharedBase(unittest.TestCase):
     def test_score_move_matches_reference(self):

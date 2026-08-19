@@ -40,9 +40,9 @@ class GreedyAI(RandomAI):
                             relevant.add((nx, ny))
         legal = [p for p in relevant if game.can_play(p[0], p[1], color)]
         if legal:
-            return legal
-        return [(x, y) for x in range(size) for y in range(size)
-                if game.can_play(x, y, color)]
+            return sorted(legal, key=lambda p: (p[0], p[1]))
+        return sorted(((x, y) for x in range(size) for y in range(size)
+                       if game.can_play(x, y, color)), key=lambda p: (p[0], p[1]))
 
     CAPTURE_BONUS = 1.0  # explicit weight for captured stones in scoring
 

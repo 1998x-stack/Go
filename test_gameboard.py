@@ -80,11 +80,10 @@ class TestGameBoard(unittest.TestCase):
         pb2 = mock.MagicMock(); pb2.get_color.return_value = 'X'
         pb2.captured = 0
         pb2.increment_captured_stones.side_effect = lambda n, p=pb2: setattr(p, 'captured', getattr(p, 'captured', 0) + n)
-        for (x, y) in [(1, 1), (0, 1), (1, 0), (1, 2)]:
-            b2.grid[y][x] = 'O' if (x, y) != (1, 1) else 'O'
         b2.grid[1][1] = 'O'; b2.grid[0][1] = 'X'; b2.grid[1][0] = 'X'; b2.grid[1][2] = 'X'
         self.assertEqual(b2.make_move(pb2, 2, 1), 1)
         self.assertEqual(pb2.captured, 1)
+        self.assertIsNone(b2.grid[1][1])  # lone O removed
 
 
 if __name__ == '__main__':
