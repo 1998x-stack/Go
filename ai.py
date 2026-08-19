@@ -2,6 +2,8 @@ import random
 from gameboard import GameBoard
 from player import Player
 
+_NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
+
 
 class RandomAI:
     """Uniformly random legal, non-ko move (or None to pass)."""
@@ -21,6 +23,26 @@ class GreedyAI(RandomAI):
     """Maximize own area gain + captures, simulated on a board copy."""
 
     name = 'Greedy'
+
+    def _candidates(self, game):
+        """Relevant legal points: empty cells adjacent to a stone. Falls back
+        to all legal points when there are no stones (empty board)."""
+        color = game.state['current']
+        grid = game.board.grid
+        size = game.size
+        relevant = set()
+        for x in range(size):
+            for y in range(size):
+                if grid[x][y] is not None:
+                    for dx, dy in _NEIGHBORS:
+                        nx, ny = x + dx, y + dy
+                        if 0 <= nx < size and 0 <= ny < size and grid[nx][ny] is None:
+                            relevant.add((nx, ny))
+        legal = [p for p in relevant if game.can_play(p[0], p[1], color)]
+        if legal:
+            return legal
+        return [(x, y) for x in range(size) for y in range(size)
+                if game.can_play(x, y, color)]
 
     def _score_move(self, game, color, x, y):
         sim = GameBoard(game.size)
