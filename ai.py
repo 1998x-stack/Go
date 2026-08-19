@@ -44,28 +44,31 @@ class GreedyAI(RandomAI):
         return [(x, y) for x in range(size) for y in range(size)
                 if game.can_play(x, y, color)]
 
-    def _score_move(self, game, color, x, y):
+    CAPTURE_BONUS = 1.0  # explicit weight for captured stones in scoring
+
+    def _score_move(self, game, color, x, y, own):
+        """Post-move area minus shared base, plus the capture weight.
+        Uses score_areas() for the after-score (identical scoring to the
+        reference), so territory evaluation is guaranteed equivalent. The
+        per-attempt board copy is retained: profiling showed it negligible
+        vs score_areas(), and it keeps the simulation isolated/readable."""
         sim = GameBoard(game.size)
         sim.grid = [row[:] for row in game.board.grid]
         tmp = Player(color)
-        base = sim.score_areas()
-        idx = 0 if color == 'X' else 1
         if not sim.place_stone(tmp, x, y):
             return float('-inf')
-        new = sim.score_areas()
-        return (new[idx] - base[idx]) + tmp.captured_stones
+        new = sim.score_areas()[0 if color == 'X' else 1]
+        return (new - own) + self.CAPTURE_BONUS * tmp.captured_stones
 
     def choose(self, game):
         if game.state['game_over']:
             return None
         color = game.state['current']
-        pts = [(x, y) for x in range(game.size) for y in range(game.size)
-              if game.can_play(x, y, color)]
-        if not pts:
-            return None
+        own = game.board.score_areas()[0 if color == 'X' else 1]  # shared base, once
+        pts = self._candidates(game)
         best, best_val = None, float('-inf')
         for (x, y) in pts:
-            v = self._score_move(game, color, x, y)
+            v = self._score_move(game, color, x, y, own)
             if v > best_val:
                 best_val, best = v, (x, y)
         return best

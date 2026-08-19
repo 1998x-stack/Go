@@ -59,5 +59,35 @@ class TestPruning(unittest.TestCase):
         self.assertTrue(all(g.can_play(x, y) for (x, y) in pts))
 
 
+class TestSharedBase(unittest.TestCase):
+    def test_score_move_matches_reference(self):
+        from gameboard import GameBoard
+        from player import Player
+        g = Game()
+        g.play(3, 3); g.play(16, 16); g.play(3, 15); g.play(15, 3)
+        ai = GreedyAI()
+        color = 'X'
+        own = g.board.score_areas()[0]
+        for (x, y) in ai._candidates(g)[:6]:
+            v = ai._score_move(g, color, x, y, own)
+            # reference: independent recompute
+            sim = GameBoard(g.size)
+            sim.grid = [row[:] for row in g.board.grid]
+            tmp = Player(color)
+            base = sim.score_areas()[0]
+            if not sim.place_stone(tmp, x, y):
+                self.assertEqual(v, float('-inf'))
+                continue
+            ref = (sim.score_areas()[0] - base) + tmp.captured_stones
+            self.assertEqual(v, ref)
+
+    def test_choose_returns_legal_move(self):
+        g = Game()
+        mv = GreedyAI().choose(g)
+        self.assertIsNotNone(mv)
+        ok, _ = g.play(mv[0], mv[1])
+        self.assertTrue(ok)
+
+
 if __name__ == '__main__':
     unittest.main()
