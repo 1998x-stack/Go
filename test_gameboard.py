@@ -68,6 +68,24 @@ class TestGameBoard(unittest.TestCase):
         self.assertIsNone(self.board.resulting_key(self.pb, 99, 99))
         self.assertIsNotNone(self.board.resulting_key(self.pb, 0, 0))
 
+    def test_make_move_and_resulting_capture_agree(self):
+        # Same position through both paths must yield identical captured coords
+        self.place('O', [(1, 1)])
+        self.place('X', [(0, 1), (1, 0), (1, 2)])
+        # resulting_key path (simulated): legal, lone O captured
+        self.assertTrue(self.board.place_stone(self.pb, 2, 1))
+        self.assertIsNone(self.board.get_stone(1, 1))
+        # rebuild and exercise make_move directly
+        b2 = GameBoard(size=5)
+        pb2 = mock.MagicMock(); pb2.get_color.return_value = 'X'
+        pb2.captured = 0
+        pb2.increment_captured_stones.side_effect = lambda n, p=pb2: setattr(p, 'captured', getattr(p, 'captured', 0) + n)
+        for (x, y) in [(1, 1), (0, 1), (1, 0), (1, 2)]:
+            b2.grid[y][x] = 'O' if (x, y) != (1, 1) else 'O'
+        b2.grid[1][1] = 'O'; b2.grid[0][1] = 'X'; b2.grid[1][0] = 'X'; b2.grid[1][2] = 'X'
+        self.assertEqual(b2.make_move(pb2, 2, 1), 1)
+        self.assertEqual(pb2.captured, 1)
+
 
 if __name__ == '__main__':
     unittest.main()

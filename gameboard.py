@@ -26,6 +26,18 @@ class GameBoard:
     def is_legal(self, player, x: int, y: int) -> bool:
         return self.resulting_key(player, x, y) is not None
 
+    def _capture_opponent(self, x, y, color):
+        """Remove opponent groups adjoining (x,y) lacking liberties; return coords."""
+        opp = 'X' if color == 'O' else 'O'
+        captured = []
+        for dx, dy in _NEIGHBORS:
+            nx, ny = x + dx, y + dy
+            if self.in_bounds(nx, ny) and self.grid[nx][ny] == opp:
+                g = self.get_groups(nx, ny)
+                if self.get_liberties(g) == 0:
+                    captured.extend(g)
+        return captured
+
     def resulting_key(self, player, x: int, y: int):
         """Simulate the move; return the resulting board_key if legal else None."""
         if not self.in_bounds(x, y) or self.grid[x][y] is not None:
@@ -33,13 +45,7 @@ class GameBoard:
         color = player.get_color()
         opp = 'X' if color == 'O' else 'O'
         self.grid[x][y] = color
-        captured = set()
-        for dx, dy in _NEIGHBORS:
-            nx, ny = x + dx, y + dy
-            if self.in_bounds(nx, ny) and self.grid[nx][ny] == opp:
-                g = self.get_groups(nx, ny)
-                if self.get_liberties(g) == 0:
-                    captured.update(g)
+        captured = self._capture_opponent(x, y, color)
         for gx, gy in captured:
             self.grid[gx][gy] = None
         my_group = self.get_groups(x, y)
@@ -60,15 +66,8 @@ class GameBoard:
     def make_move(self, player, x: int, y: int) -> int:
         """Commit a legal move; capture opponent groups and credit the player."""
         color = player.get_color()
-        opp = 'X' if color == 'O' else 'O'
         self.grid[x][y] = color
-        captured = []
-        for dx, dy in _NEIGHBORS:
-            nx, ny = x + dx, y + dy
-            if self.in_bounds(nx, ny) and self.grid[nx][ny] == opp:
-                g = self.get_groups(nx, ny)
-                if self.get_liberties(g) == 0:
-                    captured.extend(g)
+        captured = self._capture_opponent(x, y, color)
         for gx, gy in captured:
             self.grid[gx][gy] = None
         if captured:
