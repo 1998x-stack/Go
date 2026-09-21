@@ -21,7 +21,7 @@ _RECORD_FILE = "game.sgf"
 
 
 def _event(game_id, event, **fields):
-    """Build a small allowlisted diagnostic context; never include SGF text."""
+    """Build a small diagnostic context without serializing SGF records."""
     return {"game_id": game_id, "event": event, **fields}
 
 
@@ -85,9 +85,14 @@ async def main():
                         try:
                             with open(_RECORD_FILE, encoding="utf-8") as source:
                                 loaded = sgf_to_game(source.read())
-                        except (OSError, ValueError):
+                        except (OSError, ValueError) as exc:
                             message = "Load failed"
-                            logger.exception("Unable to load game", extra=_event(game_id, "sgf.load_failed"))
+                            # ValueError may include an untrusted SGF node: do not emit
+                            # its message or traceback (which could expose game data).
+                            logger.warning(
+                                "Unable to load game (%s)", type(exc).__name__,
+                                extra=_event(game_id, "sgf.load_failed"),
+                            )
                         else:
                             game = loaded
                             renderer.game = game
@@ -122,7 +127,7 @@ async def main():
                 current_game = game
                 move = ai.choose(game)
                 await asyncio.sleep(0.1)
-                # A saved/restored game or an external event can invalidate a planned move.
+                # An external event can invalidate a planned AI move.
                 if current_game is game and not game.state["game_over"] and game.state["current"] != human:
                     if move is None:
                         ok, reason = game.pass_move()
