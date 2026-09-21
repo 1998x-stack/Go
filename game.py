@@ -1,13 +1,23 @@
+"""Turn management and rules state for a headless Go game."""
+
 import copy
+
 from constants import Constants
 from gameboard import GameBoard
 from player import Player
 
 
 class Game:
-    """Turn + pass + undo + ko + score orchestrator (pygame-free)."""
+    """Go with positional-superko for stone placements and two-pass scoring.
+
+    The initial setup position is part of the position history. Passes do not
+    count as repeated positions. The history stores pre-move board snapshots
+    for compatibility with the existing renderer and SGF writer.
+    """
 
     def __init__(self, size: int = Constants.BOARD_SIZE):
+        if type(size) is not int or not 2 <= size <= 26:
+            raise ValueError('Board size must be an integer between 2 and 26')
         self.board = GameBoard(size)
         self.black = Player('X')
         self.white = Player('O')
@@ -18,8 +28,10 @@ class Game:
             'komi': Constants.DEFAULT_KOMI,
             'score': None,
         }
-        self.history = []          # (color, kind, move, grid_snapshot)
-        self._seen = set()         # board keys that occurred, for ko
+        self.history = []
+        self.handicap = 0
+        self._initial_grid = copy.deepcopy(self.board.grid)
+        self._seen = {self.board.board_key()}
 
     @property
     def size(self):
@@ -41,14 +53,34 @@ class Game:
         self.history.append((color, kind, move, copy.deepcopy(self.board.grid)))
 
     def setup(self, handicap: int = 0):
-        self.state['komi'] = 0 if handicap > 0 else Constants.DEFAULT_KOMI
-        for i in range(min(handicap, len(Constants.STAR_POINTS))):
-            x, y = Constants.STAR_POINTS[i]
-            self.board.grid[y][x] = 'X'
-        self.state['current'] = 'O' if handicap > 0 else 'X'
+        """Set up a fresh 19x19 handicap game, or reset to an empty game."""
+        if type(handicap) is not int or not 0 <= handicap <= len(Constants.STAR_POINTS):
+            raise ValueError('Handicap must be between 0 and {}'.format(len(Constants.STAR_POINTS)))
+        if handicap and self.size != 19:
+            raise ValueError('Fixed handicap is supported only on a 19x19 board')
+        if self.history:
+            raise ValueError('Cannot change the setup after the game has started')
+        self.board = GameBoard(self.size)
+        self.handicap = handicap
+        for x, y in Constants.STAR_POINTS[:handicap]:
+            self.board.grid[x][y] = 'X'
+        self._initial_grid = copy.deepcopy(self.board.grid)
+        self._seen = {self.board.board_key()}
+        self.black.captured_stones = 0
+        self.white.captured_stones = 0
+        self.state.update({
+            'current': 'O' if handicap else 'X',
+            'passes': 0,
+            'game_over': False,
+            'komi': 0 if handicap else Constants.DEFAULT_KOMI,
+            'score': None,
+        })
 
     def can_play(self, x: int, y: int, color=None) -> bool:
-        color = color or self.state['current']
+        if self.state['game_over']:
+            return False
+        if color is None:
+            color = self.state['current']
         k = self.board.resulting_key(self.player(color), x, y)
         return k is not None and k not in self._seen
 
@@ -75,7 +107,6 @@ class Game:
         self._push(color, 'pass', None)
         self.state['passes'] += 1
         if self.state['passes'] >= 2:
-            self.state['game_over'] = True
             self.finish()
         else:
             self._flip()
@@ -84,25 +115,44 @@ class Game:
     def undo(self) -> bool:
         if not self.history:
             return False
-        who, _, _, _ = self.history.pop()
-        self.state['current'] = who
-        self.state['passes'] = 0
-        self.state['game_over'] = False
+        self.history.pop()
         self._recompute()
         return True
 
     def _recompute(self):
-        """Rebuild the board and seen-keys from the remaining history."""
+        """Rebuild *all* derived state from setup and the surviving moves."""
         fresh = GameBoard(self.size)
-        seen = set()
-        for (color, kind, move, _) in self.history:
-            if kind == 'move':
-                k = fresh.resulting_key(self.player(color), move[0], move[1])
-                fresh.make_move(self.player(color), move[0], move[1])
-                if k is not None:
-                    seen.add(k)
+        fresh.grid = copy.deepcopy(self._initial_grid)
+        seen = {fresh.board_key()}
+        self.black.captured_stones = 0
+        self.white.captured_stones = 0
+        passes = 0
+        current = 'O' if self.handicap else 'X'
+        for color, kind, move, _ in self.history:
+            if color != current:
+                raise ValueError('Inconsistent turn history')
+            if kind == 'pass':
+                passes += 1
+            elif kind == 'move':
+                if move is None:
+                    raise ValueError('Missing move coordinates')
+                k = fresh.resulting_key(self.player(color), *move)
+                if k is None or k in seen:
+                    raise ValueError('Invalid move in history')
+                fresh.make_move(self.player(color), *move)
+                seen.add(k)
+                passes = 0
+            else:
+                raise ValueError('Unknown history action')
+            current = self.other(current)
         self.board.grid = fresh.grid
         self._seen = seen
+        self.state['current'] = current
+        self.state['passes'] = passes
+        self.state['game_over'] = passes >= 2
+        self.state['score'] = None
+        if self.state['game_over']:
+            self.finish()
 
     def finish(self):
         self.state['game_over'] = True
