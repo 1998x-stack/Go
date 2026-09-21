@@ -1,4 +1,4 @@
-name: Rules tests
+name: Rules and infrastructure tests
 
 on:
   pull_request:
@@ -20,7 +20,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Test rules engine without a display
+      - name: Test headless rules engine
         run: python -m unittest discover -p 'test_*.py' -v
-      - name: Compile rules and test modules
-        run: python -m compileall -q game.py gameboard.py sgf.py ai.py test_*.py
+      - name: Test headless infrastructure
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Compile all Python source
+        run: python -m compileall -q go_game main.py game.py gameboard.py sgf.py ai.py test_*.py tests
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Ruff
+        run: python -m pip install 'ruff>=0.9,<1'
+      - name: Lint refactored package and entry points
+        run: ruff check go_game main.py tests/test_logging.py renderer.py event_handler.py sound.py
