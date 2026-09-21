@@ -1,6 +1,8 @@
-from typing import List, Optional, Tuple
+"""Headless Go board with capture, liberty and area-scoring helpers."""
 
-_NEIGHBORS = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+from typing import List, Tuple
+
+_NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 
 
 class GameBoard:
@@ -27,34 +29,38 @@ class GameBoard:
         return self.resulting_key(player, x, y) is not None
 
     def _capture_opponent(self, x, y, color):
-        """Remove opponent groups adjoining (x,y) lacking liberties; return coords."""
+        """Return each captured stone exactly once, even for multi-side contact."""
         opp = 'X' if color == 'O' else 'O'
         captured = []
+        inspected = set()
         for dx, dy in _NEIGHBORS:
             nx, ny = x + dx, y + dy
-            if self.in_bounds(nx, ny) and self.grid[nx][ny] == opp:
-                g = self.get_groups(nx, ny)
-                if self.get_liberties(g) == 0:
-                    captured.extend(g)
+            if (self.in_bounds(nx, ny) and self.grid[nx][ny] == opp
+                    and (nx, ny) not in inspected):
+                group = self.get_groups(nx, ny)
+                inspected.update(group)
+                if self.get_liberties(group) == 0:
+                    captured.extend(group)
         return captured
 
     def resulting_key(self, player, x: int, y: int):
-        """Simulate the move; return the resulting board_key if legal else None."""
+        """Simulate a move without changing the board, returning None if illegal."""
         if not self.in_bounds(x, y) or self.grid[x][y] is not None:
             return None
         color = player.get_color()
         opp = 'X' if color == 'O' else 'O'
         self.grid[x][y] = color
-        captured = self._capture_opponent(x, y, color)
-        for gx, gy in captured:
-            self.grid[gx][gy] = None
-        my_group = self.get_groups(x, y)
-        liberties = self.get_liberties(my_group)
-        key = self.board_key()
-        # revert
-        self.grid[x][y] = None
-        for gx, gy in captured:
-            self.grid[gx][gy] = opp
+        captured = []
+        try:
+            captured = self._capture_opponent(x, y, color)
+            for gx, gy in captured:
+                self.grid[gx][gy] = None
+            liberties = self.get_liberties(self.get_groups(x, y))
+            key = self.board_key()
+        finally:
+            self.grid[x][y] = None
+            for gx, gy in captured:
+                self.grid[gx][gy] = opp
         return key if liberties > 0 else None
 
     def place_stone(self, player, x: int, y: int) -> bool:
@@ -64,7 +70,7 @@ class GameBoard:
         return True
 
     def make_move(self, player, x: int, y: int) -> int:
-        """Commit a legal move; capture opponent groups and credit the player."""
+        """Commit a previously checked move; credit unique captured stones."""
         color = player.get_color()
         self.grid[x][y] = color
         captured = self._capture_opponent(x, y, color)
@@ -101,9 +107,9 @@ class GameBoard:
         for x in range(self.size):
             for y in range(self.size):
                 if self.grid[x][y] == color and (x, y) not in seen:
-                    g = self.get_groups(x, y)
-                    groups.append(g)
-                    seen.update(g)
+                    group = self.get_groups(x, y)
+                    groups.append(group)
+                    seen.update(group)
         return groups
 
     def get_liberties(self, group) -> int:
@@ -120,7 +126,7 @@ class GameBoard:
         return sum(1 for row in self.grid for c in row if c == color)
 
     def score_areas(self):
-        """Chinese area scoring: stones + enclosed empty points. Komi excluded."""
+        """Chinese area scoring: stones + enclosed empty points, excluding komi."""
         black_points = self.count_stones('X')
         white_points = self.count_stones('O')
         visited_empty = set()
