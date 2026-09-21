@@ -1,146 +1,113 @@
 # Go (囲碁)
 
-A complete, correct implementation of the classic board game **Go** in Python with
-a pygame desktop client and a playable in-browser build, powered by a proper Go rules
-engine.
+A Python implementation of the board game Go with a headless rules engine,
+a pygame desktop UI, a browser build (pygbag), and a simple built-in AI.
 
-[![GitHub Pages](https://img.shields.io/badge/Play%20Online-GitHub%20Pages-blue)](#play-online)
+## Play
 
----
-
-## Overview
-
-Go — played on a 19×19 grid — is a territory-capture game of remarkable depth. This
-project delivers a faithful rules engine plus a friendly interface, so you can enjoy
-a real game against a built-in AI, on your desktop or right in the browser.
-
-The rules engine is deliberately **pygame-free and headless-testable**, so every Go
-rule is verified by an automated unit test suite.
-
----
-
-## Features
-
-- ✅ **Correct Go rules** — capture-aware *and* group-aware suicide legality, and the **Ko rule** via position-history, so no illegal moves slip through.
-- 🧮 **Chinese (area) scoring** with komi (6.5; 0 for handicap games).
-- 🤖 **Two AI players** — `Random` (casual) and `Greedy` (territory- and capture-seeking).
-- ↪️ **Undo** for taking back moves.
-- 📅 **Handicap stones** at the nine star points.
-- 🧷 **SGF save / load** — export and replay game records.
-- 🔊 Optional sound, with a defensive wrapper that never crashes the game.
-- 🖱️ **Pygame desktop client** and **playable web build** (pygbag).
-
----
-
-## 🚀 Getting Started
-
-### Play online (no install)
-
-Deployed automatically to GitHub Pages on every push to `main` — open the
-**Play Online** badge above or visit the repo's Pages URL.
-
-### Run on desktop
-
-Requires **Python 3.9+** and [pygame](https://www.pygame.org/wiki/GettingStarted):
+Use the repository's GitHub Pages deployment for the browser version, or run
+locally with Python 3.9+:
 
 ```bash
-# 1. Create and use a virtual environment (recommended)
 python3 -m venv .venv
 source .venv/bin/activate
-
-# 2. Install pygame
-pip install pygame
-
-# 3. Run
+python -m pip install pygame
 python main.py
 ```
 
-You (Black) play first; the Greedy AI (White) responds automatically.
+You play Black (`X`), and GreedyAI plays White (`O`). Click an intersection to
+place a stone. `P` passes, `U` undoes, `G` ends and scores, `S` saves to
+`game.sgf`, `L` loads it, and `Q`/Esc quits. Two consecutive passes end the game.
 
----
+The game uses Chinese area scoring with a configurable komi, position-history
+superko on placements, and fixed handicap stones on the 19×19 board. Its SGF
+reader/writer supports a deliberately limited *linear* record subset; it is not
+a full SGF FF[4] parser or a professional dead-stone adjudicator.
 
-## How to Play — Controls
+## Code organization
 
-| Action            | Control                        |
-|-------------------|--------------------------------|
-| Place a stone     | Click an intersection (Black)  |
-| Pass              | `P`                            |
-| Undo              | `U`                            |
-| End & score       | `G`                            |
-| Save SGF          | `S` (writes `game.sgf`)        |
-| Load SGF          | `L` (reads `game.sgf`)         |
-| Quit              | `Q` / `Esc` / close window     |
+```text
+main.py                         Desktop/pygbag entry point
 
-The game ends after **two consecutive passes**; the score overlay then shows the
-Chinese-area result with komi included.
+go_game/
+  app.py                        Application lifecycle, pygame event loop
+  ui/
+    events.py                   Keyboard/mouse mapping
+    renderer.py                 Board and score rendering
+    sound.py                    Optional audio adapter
+  observability/
+    logging.py                  Console and optional rotating JSON/text logs
 
----
+game.py                         Headless turn order, history, scoring
 
-## 🏗️ Architecture
+gameboard.py                    Headless board, captures, groups, liberties
+player.py                       Player model
+ai.py                           RandomAI and GreedyAI
+sgf.py                          Linear SGF import/export
+constants.py                    Game constants
+renderer.py, event_handler.py,
+sound.py                        Backward-compatible UI imports
 
-The project cleanly separates a headless rules core from the presentation layers.
-
-```
-gameboard.py       Rules engine: legality, capture, groups, liberties, area scoring
-game.py            Game orchestrator: turn order, Ko, undo, handicap, scoring
-player.py          Player (color, captures, is_human)
-ai.py              AI strategies: RandomAI, GreedyAI
-sgf.py             Minimal SGF reader/writer
-renderer.py        pygame board/stone/panel rendering
-event_handler.py   input -> actions (clicks + keys)
-main.py            pygame main loop (asyncio-compatible for desktop & web)
-sound.py           defensive audio wrapper
-constants.py       shared constants
-test_*.py          headless unit tests (run with: python3 -m pytest)
+test_*.py                       Headless rules and SGF tests
+tests/test_logging.py           Headless logging tests
 ```
 
-The **rules core** (`gameboard.py`, `game.py`, `ai.py`, `sgf.py`, `player.py`) never
-imports `pygame`, so it can be tested headlessly with the standard library.
+New presentation code belongs in `go_game.ui`, and application orchestration in
+`go_game.app`. The rules engine stays pygame-free. The remaining root-level
+headless modules will migrate in a separate PR with compatibility shims, so
+this restructure does not silently alter capture, scoring, or AI behavior.
+For conventions and follow-up architecture see
+[Style and architecture](docs/STYLE_AND_ARCHITECTURE.md).
 
----
+## Logging
 
-## The Game in 60 Seconds (for newcomers)
+Default logs use readable text on stderr. Optional controls:
 
-- Two players place **stones** of their color on the intersections of a 19×19 grid.
-- Stones connect horizontally/vertically into **groups**; a group is captured when it
-  has **no liberties** (no adjacent empty points).
-- You may not play a move that leaves your own group with no liberties (suicide) —
-  unless that move captures opponent stones.
-- **Ko** prevents an immediate re-capture that would repeat a previous position.
-- The game ends when both players pass consecutively; territory + komi decides the winner.
+| Environment variable | Values | Default |
+|---|---|---|
+| `GO_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | `INFO` |
+| `GO_LOG_FORMAT` | `text`, `json` | `text` |
+| `GO_LOG_FILE` | desktop log file path | disabled |
 
----
-
-## Testing
-
-All Go-rule logic is covered by a headless test suite:
+Example:
 
 ```bash
-python3 -m pytest test_*.py -v
+GO_LOG_LEVEL=DEBUG GO_LOG_FORMAT=json GO_LOG_FILE=game.log python main.py
 ```
 
-Coverage includes legal/illegal moves, group-aware suicide, capture-aware moves,
-Ko enforcement, Chinese-area scoring, handicap, undo, AI legality, and SGF round-trips.
+Desktop file output rotates at 5 MiB with three backups. Browser builds use
+console logging only. Logging is configured for the `go_game` namespace rather
+than globally; gameplay events have a game ID, event name and small contextual
+fields, never a full SGF record or AI candidate-by-candidate tracing.
+Runtime logs and locally saved `game.sgf` are ignored by Git.
 
----
+## Testing and style
 
-## Building the Web Version
-
-The in-browser build is generated with [pygbag](https://pygbag.github.io/), normally
-in CI (GitHub Actions → GitHub Pages):
+Headless rules and infrastructure tests need only the standard library:
 
 ```bash
-pip install pygame pygbag
-python -m pygbag --build main.py   # outputs build/web
+python -m unittest discover -p 'test_*.py' -v
+python -m unittest discover -s tests -p 'test_*.py' -v
+python -m compileall -q go_game main.py game.py gameboard.py sgf.py ai.py
 ```
 
----
+For linting, install Ruff and run:
 
-## Tech Stack
+```bash
+python -m pip install ruff
+ruff check go_game main.py tests/test_logging.py renderer.py event_handler.py sound.py
+```
 
-**Python ≥ 3.9** · **pygame 2.x** · **pygbag** (web build) · **GitHub Actions**
-(deploy) · **pytest** (tests)
+CI runs headless tests and compilation under Python 3.9/3.11/3.13 and Ruff
+on the refactored package. These checks do **not** replace an actual pygame
+UI smoke test or a browser end-to-end test.
 
-## License
+## Web build
 
-This project is provided for educational purposes. See the repository for details.
+The root `main.py` stays in place because the GitHub Pages deploy workflow
+uses `python -m pygbag main.py`. The browser landing page is in `web/index.html`.
+For a local build, install `pygbag` alongside pygame, then run:
+
+```bash
+python -m pygbag --build main.py
+```
