@@ -44,7 +44,8 @@ class GoAECEnv(AECEnv):
         return self._action_spaces[agent]
 
     def reset(self, seed=None, options=None):
-        if options:
+        if options and any(key in options for key in (
+                "rules", "rule_id", "board_size", "komi_half_points", "handicap")):
             raise ValueError("Rule configuration is immutable within one environment")
         self.core.reset(seed=seed)
         self.agents = list(self.possible_agents)
