@@ -32,7 +32,7 @@
 | --- | --- |
 | `platform.storage` | 单机 SQLite WAL，外键、事务隔离，完整事件落地 |
 | `platform.games` | create/snapshot、CAS 落子、actor 核验、重启恢复、可验证 SGF 和 canonical record |
-| `platform.analysis` | 绑定棋局 seq + state_hash + rule_id + model_id 的 PUCT 分析；最多 32 次搜索，较大棋盘限额更严；拒绝过期结果 |
+| `platform.analysis` | 绑定棋局 seq + state_hash + rule_id + model_id 的 PUCT 分析；新局的 champion 权重连同 manifest 归档为不可变模型资产，后续 champion 轮换后旧局仍可推理；最多 32 次搜索 |
 | `platform.jobs` | 实验/run/job schema，提交幂等，排队、claim、heartbeat、finish、cancel；过期重领、attempt fencing |
 | `platform.worker` | 本地独立可信 Worker，支持 selfplay、validate_shard、learn、evaluate、export_model 五类内置工作流；仅使用已验证的规则与已提交工件 |
 | `platform.artifacts` | 本地 SHA-256 内容寻址对象，原子硬链接发布与读取时摘要复核 |
@@ -135,7 +135,7 @@ Job 不接受任意要在 API 进程执行的 Python 或 shell 字符串；`kind
 
 worker lease 过期可重新领取，`attempt` 单调增加。旧 worker 的完成/心跳都会得到 `stale_lease`，不能覆盖新 attempt 的结果。当前 SQLite 仅适用于单机，不可部署到 NFS 共享数据库做多主队列；多机时须换 PostgreSQL 事务、对象存储和独立部署测试。
 
-模型发布：采用方案 B 的 `LocalRegistry` 只读 champion，只有已经验权的模型可用作分析；**API 不提供无 Arena 晋级的直接发布操作**。可用模型仍需显式在创建游戏时绑定。若模型权重被修改或 manifest 不匹配则拒绝分析。
+模型发布：采用方案 B 的 `LocalRegistry` 只读 champion，新建对局时把经校验的 champion checkpoint 内容哈希与 manifest 原子归档到 `model_assets`。后续 registry 指针轮换，历史棋局仍从归档不可变工件按 model_id 重建，防止模型漂移。**API 不提供无 Arena 晋级的直接发布操作**。若模型权重或 manifest 不匹配则拒绝分析。
 
 ## 6. 测试
 

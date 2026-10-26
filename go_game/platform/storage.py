@@ -47,6 +47,12 @@ class PlatformStore:
                     UNIQUE(owner, request_key)
                 );
                 CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs(status, created_utc);
+                CREATE TABLE IF NOT EXISTS model_assets (
+                    model_id TEXT PRIMARY KEY,
+                    checkpoint_digest TEXT NOT NULL,
+                    manifest TEXT NOT NULL,
+                    recorded_utc TEXT NOT NULL
+                );
             """)
 
     def _connect(self):

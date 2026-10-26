@@ -12,7 +12,7 @@ from pydantic import BaseModel, StrictInt
 from go_game.core import RuleSpec
 from go_game.training.registry import LocalRegistry
 
-from .analysis import AnalysisService
+from .analysis import AnalysisService, ModelCatalog
 from .artifacts import ArtifactStore
 from .errors import PlatformError
 from .games import GameService
@@ -93,9 +93,10 @@ def create_app(database_path=None, tokens=None, registry_path=None, artifact_pat
     games = GameService(store)
     jobs = JobService(store)
     registry = LocalRegistry(registry_path) if registry_path else None
-    analysis = AnalysisService(games, registry)
     artifacts = ArtifactStore(
         artifact_path or os.environ.get("GO_PLATFORM_ARTIFACTS", "runs/artifacts"))
+    analysis = AnalysisService(games, registry, artifacts)
+    catalog = ModelCatalog(store, artifacts, registry)
     app = FastAPI(title="Go AI Platform", version="1.0")
     auth = HTTPBearer(auto_error=False)
 
@@ -149,9 +150,7 @@ def create_app(database_path=None, tokens=None, registry_path=None, artifact_pat
         except (ValueError, TypeError, KeyError) as exc:
             raise PlatformError("invalid_rules", str(exc), 422) from exc
         if body.model_id != "uniform-baseline-v1":
-            if registry is None or registry.current() is None or (
-                    registry.current()["model_id"] != body.model_id):
-                raise PlatformError("unknown_model", "Only current champion can be pinned", 422)
+            catalog.pin_champion(body.model_id)
         return games.create(rules, body.black_actor, body.white_actor, body.model_id)
 
     @app.get("/v1/games/{game_id}")

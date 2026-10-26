@@ -52,6 +52,32 @@ class TestLocalTrainingWorker(unittest.TestCase):
             self.assertEqual(
                 model["manifest"]["checkpoint_sha256"],
                 model["checkpoint_artifact"])
+            # Freeze the game model. Deleting the registry pointer and its
+            # original checkpoint must not break analysis of historical games.
+            from go_game.platform.analysis import ModelCatalog, AnalysisService
+            from go_game.platform.games import GameService
+            from go_game.training.registry import LocalRegistry
+
+            checkpoint = Path(root) / "champion.pt"
+            checkpoint.write_bytes(
+                objects.get(model["checkpoint_artifact"]))
+            registry_path = Path(root) / "registry.json"
+            registry = LocalRegistry(registry_path)
+            registry.bootstrap(model["manifest"], checkpoint)
+            catalog = ModelCatalog(store, objects, registry)
+            catalog.pin_champion(model["manifest"]["model_id"])
+            live = GameService(store)
+            historical = live.create(
+                RuleSpec(board_size=2), "alice", "bob",
+                model_id=model["manifest"]["model_id"])
+            registry_path.unlink()
+            checkpoint.unlink()
+            old_analysis = AnalysisService(live, artifacts=objects).analyze(
+                historical["game_id"], expected_seq=0, simulations=1)
+            self.assertEqual(old_analysis["model_id"], model["manifest"]["model_id"])
+            self.assertEqual(old_analysis["source_seq"], 0)
+            self.assertEqual(sum(old_analysis["visits"]), 1)
+
             submit("evaluate", {
                 "candidate_bundle": train["artifact_digest"],
                 "champion_bundle": train["artifact_digest"],
