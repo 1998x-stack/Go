@@ -80,6 +80,43 @@ class TestTorchTraining(unittest.TestCase):
             with self.assertRaises(ValueError):
                 registry.promote(manifest, path, gate)
 
+    def test_cpu_actor_process_pins_checkpoint_and_commits_only_valid_shards(self):
+        import torch
+        from go_game.training.actors import collect_selfplay
+        from go_game.training.learner import Learner
+        from go_game.training.network import NetworkConfig, PolicyValueNet
+        from go_game.training.search import SearchConfig
+        from go_game.training.dataset import read_shard
+        from go_game.core import RuleSpec
+
+        # Force a deterministic pass-biased model to get complete 2-pass games.
+        model = PolicyValueNet(NetworkConfig(2, channels=8, blocks=0))
+        with torch.no_grad():
+            for param in model.parameters():
+                param.zero_()
+            model.pass_head.bias.fill_(12.0)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "pass-model.pt"
+            manifest = Learner(model, seed=99).save(path)
+            results = collect_selfplay(
+                path, manifest["model_id"], RuleSpec(board_size=2),
+                SearchConfig(simulations=2, dirichlet_fraction=0),
+                seeds=[11, 12], workers=1, max_moves=10,
+                output=Path(folder) / "shards")
+            self.assertEqual(len(results), 2)
+            self.assertNotEqual(results[0]["digest"], results[1]["digest"])
+            for result in results:
+                shard = read_shard(result["path"])
+                self.assertTrue(shard["record"]["terminated"])
+                self.assertEqual(len(shard["examples"]), 2)
+                self.assertEqual(result["model_id"], manifest["model_id"])
+            with self.assertRaises(ValueError):
+                collect_selfplay(path, "wrong-model-id",
+                                 RuleSpec(board_size=2),
+                                 SearchConfig(simulations=2), seeds=[13],
+                                 workers=1, max_moves=10,
+                                 output=Path(folder) / "bad")
+
     def test_independent_color_swapped_arena(self):
         from go_game.training.arena import evaluate_candidate
         from go_game.training.network import TorchPredictor

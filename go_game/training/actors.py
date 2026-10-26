@@ -3,6 +3,7 @@
 This is not a cross-machine job queue. Remote leases/fencing are Plan C.
 """
 import os
+import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict
 
@@ -51,7 +52,9 @@ def collect_selfplay(checkpoint, model_id, rules=None, config=None, seeds=None,
     os.makedirs(output, exist_ok=True)
     job_args = [(os.fspath(checkpoint), model_id, rules.to_dict(),
                  asdict(config), seed, max_moves, os.fspath(output)) for seed in seeds]
-    with ProcessPoolExecutor(max_workers=workers) as pool:
+    # Spawn avoids forking an already-initialized PyTorch/OpenMP thread pool.
+    with ProcessPoolExecutor(
+            max_workers=workers, mp_context=multiprocessing.get_context("spawn")) as pool:
         results = list(pool.map(_actor_job, job_args))
     for result in results:
         item = read_shard(result["path"])

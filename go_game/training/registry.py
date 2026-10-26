@@ -32,6 +32,27 @@ def verify_checkpoint(manifest, checkpoint_path):
         raise ValueError("Checkpoint bytes differ from model manifest")
     if not manifest.get("model_id") or not manifest.get("dataset_digests"):
         raise ValueError("Missing lineage in model manifest")
+    # File checksum alone does not prove manifest-to-weights identity. Verify
+    # the model tensors and frozen action/observation/reward rule contracts.
+    import torch
+    from .network import NetworkConfig, PolicyValueNet, model_digest
+
+    payload = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    arch = payload.get("architecture", {})
+    if (manifest.get("architecture") != arch
+            or manifest.get("observation_spec_id") != payload.get("observation_spec_id")
+            or manifest.get("training_rules") != payload.get("training_rules")
+            or manifest.get("dataset_digests") != payload.get("dataset_digests")
+            or manifest.get("action_spec_id") != payload.get("action_spec_id")
+            or manifest.get("reward_spec_id") != payload.get("reward_spec_id")
+            or manifest["model_id"] != payload.get("model_id")):
+        raise ValueError("Manifest / checkpoint contract mismatch")
+    model = PolicyValueNet(NetworkConfig(
+        board_size=arch["board_size"], channels=arch["channels"],
+        blocks=arch["blocks"]))
+    model.load_state_dict(payload["state_dict"], strict=True)
+    if model_digest(model) != manifest["model_id"]:
+        raise ValueError("Model weights do not match manifest ID")
     return True
 
 
