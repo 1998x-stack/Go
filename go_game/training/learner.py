@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional as F
 
 from go_game.rl.features import OBS_SPEC
+from go_game.core import RuleSpec
 from .dataset import validate_shard
 from .augmentation import transform_sample
 from .network import NetworkConfig, PolicyValueNet, model_digest
@@ -28,6 +29,7 @@ class Learner:
         self.seed = seed
         self.rng = random.Random(seed)
         self.dataset_digests = []
+        self.training_rules = None
 
     def train(self, shards, steps=1, batch_size=8, augment=False):
         if type(steps) is not int or steps < 1 or type(batch_size) is not int or batch_size < 1:
@@ -49,6 +51,9 @@ class Learner:
             digests.append(shard["digest"])
         if not samples:
             raise ValueError("Refusing to train on an empty/incomplete dataset")
+        if self.training_rules is not None and self.training_rules != rules:
+            raise ValueError("Cannot resume on a different rule/komi without a new run")
+        self.training_rules = rules
         self.dataset_digests = sorted(set(self.dataset_digests + digests))
         self.model.train()
         metrics = []
@@ -103,6 +108,9 @@ class Learner:
             "torch_rng_state": torch.get_rng_state(),
             "cuda_rng_states": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else [],
             "dataset_digests": self.dataset_digests,
+            "training_rules": self.training_rules,
+            "action_spec_id": "row-major-pass-last-v1",
+            "reward_spec_id": "terminal-zero-sum-v1",
             "model_id": model_digest(self.model),
         }
 
@@ -128,6 +136,11 @@ class Learner:
                 "architecture": self.model.config.to_dict(),
                 "observation_spec_id": OBS_SPEC,
                 "dataset_digests": list(self.dataset_digests),
+                "training_rules": self.training_rules,
+                "supported_rulesets": (
+                    [self.training_rules["rule_id"]] if self.training_rules else []),
+                "action_spec_id": "row-major-pass-last-v1",
+                "reward_spec_id": "terminal-zero-sum-v1",
                 "training_step": self.step_number}
 
     @classmethod
@@ -149,6 +162,14 @@ class Learner:
         learner.optimizer.load_state_dict(payload["optimizer"])
         learner.step_number = payload["step"]
         learner.dataset_digests = list(payload["dataset_digests"])
+        learner.training_rules = payload["training_rules"]
+        if learner.training_rules is not None:
+            RuleSpec.from_dict(learner.training_rules)
+            if learner.training_rules["board_size"] != config.board_size:
+                raise ValueError("Checkpoint rule/architecture board mismatch")
+        if (payload["action_spec_id"] != "row-major-pass-last-v1"
+                or payload["reward_spec_id"] != "terminal-zero-sum-v1"):
+            raise ValueError("Checkpoint action/reward spec mismatch")
         learner.rng.setstate(payload["python_rng_state"])
         torch.set_rng_state(payload["torch_rng_state"])
         if torch.cuda.is_available() and payload["cuda_rng_states"]:

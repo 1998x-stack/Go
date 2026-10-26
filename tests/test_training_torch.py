@@ -62,6 +62,9 @@ class TestTorchTraining(unittest.TestCase):
             initial_digest = model_digest(learner.model)
             restored = Learner.load(path)
             self.assertEqual(restored.step_number, learner.step_number)
+            self.assertEqual(restored.training_rules, self.shard["record"]["rules"])
+            self.assertEqual(manifest["action_spec_id"], "row-major-pass-last-v1")
+            self.assertEqual(manifest["supported_rulesets"], ["research-psk-v1"])
             self.assertEqual(model_digest(restored.model), initial_digest)
             learner.train([self.shard], steps=1, batch_size=2)
             restored.train([self.shard], steps=1, batch_size=2)
@@ -91,6 +94,9 @@ class TestTorchTraining(unittest.TestCase):
             pairs=1, seed=5, max_moves=100)
         self.assertEqual(len(report["games"]), 2)
         self.assertEqual(report["completed"] + report["truncated"], 2)
+        self.assertEqual(report["confidence_method"],
+                         "hoeffding_complete_color_pairs")
+        self.assertEqual(report["complete_pairs"] * 2, report["scored_games"])
 
 
 # Keep Torch imports entirely out of standard-library CI discovery.

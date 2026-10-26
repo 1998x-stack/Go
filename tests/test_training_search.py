@@ -120,10 +120,14 @@ class TestSamples(unittest.TestCase):
     def test_arena_promotion_requires_independent_evidence(self):
         report = {
             "schema": "model-arena-v1", "completed": 1,
+            "complete_pairs": 0, "scored_games": 0,
+            "confidence_method": "hoeffding_complete_color_pairs",
             "confidence_95_hoeffding": [0.7, 1.0],
         }
         self.assertEqual(promotion_decision(report), "insufficient_evidence")
         report["completed"] = 100
+        report["complete_pairs"] = 50
+        report["scored_games"] = 100
         self.assertEqual(promotion_decision(report), "promote")
         report["confidence_95_hoeffding"] = [0.4, 0.8]
         self.assertEqual(promotion_decision(report), "retain_champion")

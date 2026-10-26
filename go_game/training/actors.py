@@ -20,6 +20,8 @@ def _actor_job(args):
     checkpoint, expected_id, rule_spec, config_spec, seed, max_moves, folder = args
     learner = Learner.load(checkpoint, device="cpu")
     predictor = TorchPredictor(learner.model)
+    if learner.training_rules is not None and learner.training_rules != rule_spec:
+        raise ValueError("Actor requested a different training rule configuration")
     if predictor.model_id != expected_id:
         raise ValueError("Actor checkpoint does not match pinned model ID")
     shard = selfplay_game(predictor, RuleSpec.from_dict(rule_spec),
