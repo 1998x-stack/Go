@@ -109,7 +109,8 @@ class Learner:
     def save(self, path):
         path = os.path.abspath(os.fspath(path))
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        fd, temp = tempfile.mkstemp(prefix=".checkpoint-", dir=os.path.dirname(path))
+        fd, temp = tempfile.mkstemp(prefix="checkpoint-", suffix=".pt",
+                                    dir=os.path.dirname(path))
         os.close(fd)
         try:
             torch.save(self.checkpoint(), temp)

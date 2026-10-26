@@ -2,6 +2,7 @@
 
 Optional PyTorch dependency; no Torch import in headless Rules/Env modules.
 """
+import copy
 import hashlib
 import json
 from dataclasses import asdict, dataclass
@@ -90,7 +91,8 @@ def model_digest(model):
 
 class TorchPredictor:
     def __init__(self, model, device="cpu"):
-        self.model = model.to(device)
+        # Snapshot the model: learner updates must never mutate a live actor.
+        self.model = copy.deepcopy(model).to(device)
         self.device = device
         self.model.eval()
         self.model_id = model_digest(self.model)
