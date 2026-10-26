@@ -132,8 +132,9 @@ def write_shard(path, shard):
     target = os.path.abspath(os.fspath(path))
     os.makedirs(os.path.dirname(target), exist_ok=True)
     if os.path.exists(target):
-        if open(target, "rb").read() == payload:
-            return shard["digest"]
+        with open(target, "rb") as previous:
+            if previous.read() == payload:
+                return shard["digest"]
         raise FileExistsError("Shard names are immutable; use a new content ID")
     fd, temp = tempfile.mkstemp(prefix=".uncommitted-", dir=os.path.dirname(target))
     try:

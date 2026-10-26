@@ -83,7 +83,8 @@ def model_digest(model):
     for name, tensor in sorted(model.state_dict().items()):
         digest.update(name.encode("utf-8"))
         contiguous = tensor.detach().cpu().contiguous()
-        digest.update(contiguous.numpy().tobytes())
+        # Use raw bytes without requiring NumPy in CPU-only PyTorch setups.
+        digest.update(bytes(contiguous.view(torch.uint8).reshape(-1).tolist()))
     return "sha256:" + digest.hexdigest()
 
 
