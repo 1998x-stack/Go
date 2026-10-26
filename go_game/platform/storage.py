@@ -40,11 +40,11 @@ class PlatformStore:
                     id TEXT PRIMARY KEY, owner TEXT NOT NULL, kind TEXT NOT NULL,
                     request_key TEXT NOT NULL, spec_hash TEXT NOT NULL,
                     spec TEXT NOT NULL, status TEXT NOT NULL,
-                    UNIQUE(owner, request_key),
                     attempt INTEGER NOT NULL DEFAULT 0,
                     lease_owner TEXT, lease_until REAL,
                     artifact_digest TEXT, created_utc TEXT NOT NULL,
-                    updated_utc TEXT NOT NULL
+                    updated_utc TEXT NOT NULL,
+                    UNIQUE(owner, request_key)
                 );
                 CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs(status, created_utc);
             """)
