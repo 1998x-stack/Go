@@ -34,6 +34,7 @@
 | `platform.games` | create/snapshot、CAS 落子、actor 核验、重启恢复、可验证 SGF 和 canonical record |
 | `platform.analysis` | 绑定棋局 seq + state_hash + rule_id + model_id 的 PUCT 分析；最多 32 次搜索，较大棋盘限额更严；拒绝过期结果 |
 | `platform.jobs` | 实验/run/job schema，提交幂等，排队、claim、heartbeat、finish、cancel；过期重领、attempt fencing |
+| `platform.worker` | 本地独立可信 Worker，支持 selfplay、validate_shard、learn、evaluate、export_model 五类内置工作流；仅使用已验证的规则与已提交工件 |
 | `platform.artifacts` | 本地 SHA-256 内容寻址对象，原子硬链接发布与读取时摘要复核 |
 | `platform.api` | FastAPI 鉴权、schema 拒绝未知字段、状态码、REST、SSE |
 | `platform.web` | 单页响应式棋盘、落子、Pass、MCTS 分析、SGF 下载、实时事件恢复 |
@@ -69,6 +70,53 @@ uvicorn go_game.platform.run:app --host 127.0.0.1 --port 8008
 
 打开 `http://127.0.0.1:8008/`，填入账号 token，创建 5×5 / 9×9 棋局。另一位玩家在另一浏览器打开相同 Game ID 登录白方账号：两端通过后端事件流实时更新。未经服务端确认的落子不算成功。
 
+### 运行可信本地 Worker
+
+在相同数据库与工件根目录下，独立终端运行（需安装 CPU PyTorch 才能执行 learn/evaluate/export 任务）：
+
+```bash
+python -m go_game.platform.worker \\
+  --db runs/platform.sqlite3 \\
+  --artifacts runs/artifacts \\
+  --worker-id go-local-1 --max-jobs 10
+```
+
+`--max-jobs` 限制本次处理的作业总数；Worker 不从 API 接受脚本或任意文件路径，严格校验每类 `inputs` 字段。演示 Self-Play 的提交体：
+
+```json
+{
+  "request_key": "selfplay-demo-001",
+  "kind": "selfplay",
+  "spec": {
+    "experiment_id": "go-small-board",
+    "run_id": "trial-001",
+    "inputs": {
+      "rules": {
+        "schema": "rules-v1",
+        "rule_id": "research-psk-v1",
+        "board_size": 2,
+        "komi_half_points": 11,
+        "handicap": 0,
+        "ko_rule": "positional_superko",
+        "suicide": "forbidden",
+        "scoring": "area_simple",
+        "end_protocol": "two_pass_no_adjudication"
+      },
+      "seed": 42,
+      "simulations": 2,
+      "max_moves": 200
+    },
+    "budget": {
+      "cpu_seconds": 120,
+      "gpu_seconds": 0,
+      "storage_mb": 16
+    }
+  }
+}
+```
+
+完成后返回的 `artifact_digest` 可作为下一条 `validate_shard` 或 `learn` Job 的输入。批量 Worker 不承担公网不可信代码执行，且当前 CPU 时间预算执行后审查而非硬隔离时钟；上线须在外层进程/容器施加硬 CPU/RAM/IO 限额。
+
 ## 4. 核心数据与重连
 
 对局落子事务流程：
@@ -83,7 +131,7 @@ uvicorn go_game.platform.run:app --host 127.0.0.1 --port 8008
 
 ## 5. 任务调度和模型发布的可信边界
 
-Job 不接受任意要在 API 进程执行的 Python 或 shell 字符串；`kind` 仅允许 `selfplay/validate_shard/learn/evaluate/export_model`，manifest 包含 experiment/run、inputs 和 CPU/GPU/存储预算。服务端只负责控制平面租约；**当前没有自动执行整套远程训练的生产 worker daemon**。方案 B 的本地 CLI/Actor 可以由可信 operator worker 配合该队列运行，结果必须上传为摘要对象后再 `complete`。
+Job 不接受任意要在 API 进程执行的 Python 或 shell 字符串；`kind` 仅允许 `selfplay/validate_shard/learn/evaluate/export_model`，manifest 包含 experiment/run、inputs 和 CPU/GPU/存储预算。服务端提供控制平面租约；`LocalWorker` 是可信的本机执行进程，按白名单执行 `selfplay`（2–5 棋盘）、`validate_shard`、`learn`、`evaluate`、`export_model`，工件自动进入内容寻址对象存储，成功任务结果绑定数据摘要。研究者不能向进程上传任意 Python/命令字符串；learn 仅消费已完成 selfplay 的数据，evaluate/export 仅引用已完成 learn 的模型工件。**这不是具备容器隔离、GPU 配额强制和多机容错的生产 Worker 系统。**
 
 worker lease 过期可重新领取，`attempt` 单调增加。旧 worker 的完成/心跳都会得到 `stale_lease`，不能覆盖新 attempt 的结果。当前 SQLite 仅适用于单机，不可部署到 NFS 共享数据库做多主队列；多机时须换 PostgreSQL 事务、对象存储和独立部署测试。
 
@@ -109,6 +157,6 @@ CI 除 A/B 的既有 Python 3.9/3.11/3.13、PyTorch、Gym、pygame 外，另加 
 
 ## 7. 仍未完成的方案 C 高阶能力
 
-**C0–C4 的单机基础链路**已形成可运行实现；C5/C6 中完整 PostgreSQL + S3 多机部署、跨主机故障恢复、集群级资源隔离、生产级 TLS/集中身份服务、专业 GTP 桥接、GPU 推理微批与正式模型发布后台仍需独立实施与验证。当前前端是轻量研究看板，不提供完整多用户账户系统。
+**C0–C4 的单机基础链路**已形成可运行实现；C5/C6 中完整 PostgreSQL + S3 多机部署、跨主机故障恢复、集群级资源隔离、生产级 TLS/集中身份服务、专业 GTP 桥接、GPU 推理微批与正式模型发布后台仍需独立实施与验证。当前前端是轻量研究看板，不提供完整多用户账户系统。本地 Worker 可执行五类白名单任务，但不是长期运行的多机生产执行调度系统。
 
 参考：[方案 C 设计](03-plan-c-full-platform.md) · [核心资产](00-core-assets-and-contracts.md) · [方案 B 实现](06-plan-b-implementation.md)。

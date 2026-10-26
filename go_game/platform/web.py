@@ -109,29 +109,37 @@ async function watch(){
  if(streamCtl)streamCtl.abort();
  if(!snapshot)return;
  const id=snapshot.game_id;streamCtl=new AbortController();
+ const signal=streamCtl.signal;
  let seq=snapshot.seq,buffer="";
- try{
-  const response=await fetch("/v1/games/"+id+"/stream?after_seq="+seq,{
-    headers:{"Authorization":"Bearer "+token},signal:streamCtl.signal});
-  if(!response.ok)throw new Error("SSE "+response.status);
-  const reader=response.body.getReader(),decoder=new TextDecoder();
-  while(true){
-   const {done,value}=await reader.read();if(done)break;
-   buffer+=decoder.decode(value,{stream:true});
-   let boundary;
-   while((boundary=buffer.indexOf("\n\n"))>=0){
-    const part=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);
-    const data=part.split("\n").find(l=>l.startsWith("data: "));
-    if(!data)continue;
-    const item=JSON.parse(data.slice(6));
-    if(item.seq!==seq+1){await refresh();seq=snapshot.seq;continue}
-    seq=item.seq;
-    $('log').textContent=`#${seq} · ${item.actor_id} · `
-      +JSON.stringify(item.move)+"\n"+$('log').textContent;
-    await refresh();
+ while(!signal.aborted){
+  try{
+   const response=await fetch("/v1/games/"+id+"/stream?after_seq="+seq,{
+    headers:{"Authorization":"Bearer "+token},signal});
+   if(!response.ok)throw new Error("SSE "+response.status);
+   const reader=response.body.getReader(),decoder=new TextDecoder();
+   buffer="";
+   while(!signal.aborted){
+    const {done,value}=await reader.read();if(done)break;
+    buffer+=decoder.decode(value,{stream:true});
+    let boundary;
+    while((boundary=buffer.indexOf("\n\n"))>=0){
+     const part=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);
+     const data=part.split("\n").find(l=>l.startsWith("data: "));
+     if(!data)continue;
+     const item=JSON.parse(data.slice(6));
+     if(item.seq!==seq+1){await refresh();seq=snapshot.seq;continue}
+     seq=item.seq;
+     $('log').textContent=`#${seq} · ${item.actor_id} · `
+       +JSON.stringify(item.move)+"\n"+$('log').textContent;
+     await refresh();
+    }
    }
+  }catch(e){
+   if(e.name==="AbortError")break;
+   error(e)
   }
- }catch(e){if(e.name!=="AbortError")error(e)}
+  if(!signal.aborted)await new Promise(ok=>setTimeout(ok,1200));
+ }
 }
 async function move(action){
  if(pending||!snapshot)return;

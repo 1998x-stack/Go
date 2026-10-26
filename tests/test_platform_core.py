@@ -198,7 +198,39 @@ class TestJobs(BaseDb):
         self.assertIsNone(self.jobs.claim("operator"))
 
 
+    def test_local_worker_executes_only_builtin_jobs_and_persists_valid_data(self):
+        from go_game.platform.worker import LocalWorker
+        from go_game.platform.artifacts import ArtifactStore
+        from go_game.training.dataset import validate_shard
+
+        jobs = JobService(self.store)
+        objects = ArtifactStore(Path(self.tmp.name) / "worker-objects")
+        worker = LocalWorker(self.store, objects, "trusted-operator")
+        config = {
+            "experiment_id": "worker-exp", "run_id": "trial-1",
+            "inputs": {
+                "rules": make_spec(2).to_dict(), "seed": 21,
+                "simulations": 2, "max_moves": 200,
+            },
+            "budget": {"cpu_seconds": 60, "gpu_seconds": 0, "storage_mb": 10},
+        }
+        created = jobs.submit("researcher", "do-selfplay", "selfplay", config)
+        result = worker.run_once()
+        self.assertEqual(result["job_id"], created["job_id"])
+        self.assertEqual(result["status"], "succeeded")
+        shard = json.loads(objects.get(result["artifact_digest"]))
+        self.assertTrue(validate_shard(shard))
+        validate = dict(config, inputs={"shard_digest": result["artifact_digest"]})
+        jobs.submit("researcher", "check-shard", "validate_shard", validate)
+        verified = worker.run_once()
+        self.assertEqual(verified["status"], "succeeded")
+        record = json.loads(objects.get(verified["artifact_digest"]))
+        self.assertEqual(record["schema"], "verified-shard-v1")
+        self.assertIsNone(worker.run_once())
+
+
 class TestArtifacts(BaseDb):
+
     def test_put_idempotent_integrity_and_traversal(self):
         store = ArtifactStore(Path(self.tmp.name) / "objects", max_bytes=100)
         digest = store.put(b"hello\n")
