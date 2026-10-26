@@ -22,6 +22,10 @@ class TestRulesContract(unittest.TestCase):
                 RuleSpec(**values)
         with self.assertRaises(ValueError):
             RuleSpec(board_size=9, handicap=2)
+        malformed = self.rules.to_dict()
+        malformed["unrecognized_rule"] = True
+        with self.assertRaises(ValueError):
+            RuleSpec.from_dict(malformed)
 
     def test_action_to_legacy_coordinate_not_transposed(self):
         state = self.engine.new_game(self.rules)
@@ -57,11 +61,57 @@ class TestRulesContract(unittest.TestCase):
         self.assertEqual(self.engine.legal_actions(state)[25], True)
         with self.assertRaises(ValueError):
             self.engine.undo(state, token)
+        repeated = self.engine.apply_in_place(state, 7)
+        self.assertEqual(state.fingerprint, token.fingerprint_after)
+        with self.assertRaisesRegex(ValueError, "Stale"):
+            self.engine.undo(state, token)
+        self.engine.undo(state, repeated)
         self.assertTrue(self.engine.try_apply(state, 25).ok)
         self.assertTrue(self.engine.try_apply(state, 25).ok)
         self.assertTrue(state.terminated)
         self.assertTrue(all(not v for v in self.engine.legal_actions(state)))
         self.assertEqual(self.engine.score(state).winner, "O")
+
+    def test_rotation_equivariance_and_sgf_legacy_equivalence(self):
+        import random
+        from game import Game
+        from sgf import sgf_to_game
+        for size in (5, 9):
+            rules = RuleSpec(board_size=size, komi_half_points=11)
+            source = self.engine.new_game(rules)
+            rotated = self.engine.new_game(rules)
+            legacy = Game(size)
+            legacy.state["komi"] = rules.komi_half_points / 2
+            rng = random.Random(144 + size)
+            for _ in range(18):
+                mask = self.engine.legal_actions(source)
+                legal = [i for i, ok in enumerate(mask) if ok]
+                action = rng.choice(legal)
+                if action == size * size:
+                    turned = action
+                    self.assertTrue(legacy.pass_move()[0])
+                else:
+                    row, col = divmod(action, size)
+                    turned = col * size + (size - 1 - row)
+                    self.assertTrue(legacy.play(col, row)[0])
+                self.assertTrue(self.engine.try_apply(source, action).ok)
+                self.assertTrue(self.engine.try_apply(rotated, turned).ok)
+                for r in range(size):
+                    for c in range(size):
+                        self.assertEqual(rotated.board[c][size - 1 - r],
+                                         source.board[r][c])
+                        self.assertEqual(source.board[r][c],
+                                         legacy.board.grid[c][r])
+                        self.assertEqual(
+                            self.engine.legal_actions(rotated)[
+                                c * size + (size - 1 - r)],
+                            self.engine.legal_actions(source)[r * size + c])
+                self.assertEqual(self.engine.score(source),
+                                 self.engine.score(rotated))
+                if source.terminated:
+                    break
+            self.assertEqual(sgf_to_game(game_to_sgf(legacy)).board.board_key(),
+                             legacy.board.board_key())
 
     def test_history_planes_and_perspective(self):
         state = self.engine.new_game(self.rules)

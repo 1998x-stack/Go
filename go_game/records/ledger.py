@@ -6,12 +6,15 @@ from go_game.core import RuleSpec, RulesEngine
 
 
 def _digest(value):
-    data = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    data = json.dumps(value, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=True, allow_nan=False)
     return hashlib.sha256(data.encode("ascii")).hexdigest()
 
 
 class EventLedger:
     def __init__(self, rules=None, seed=None):
+        if seed is not None and type(seed) is not int:
+            raise ValueError("seed must be an int or None")
         self.engine = RulesEngine()
         self.state = self.engine.new_game(rules or RuleSpec())
         self.seed = seed
@@ -53,6 +56,12 @@ def replay_and_verify(record):
     """Fail closed on schema changes, illegal actions, tampering or missing events."""
     if not isinstance(record, dict) or record.get("schema") != "game-record-v1":
         raise ValueError("Unsupported record schema")
+    required = {"schema", "rules", "seed", "initial_state", "events",
+                "outcome", "terminated", "digest"}
+    if set(record) != required or not isinstance(record["events"], list):
+        raise ValueError("Unexpected game-record-v1 fields")
+    if len(record["events"]) > 10000:
+        raise ValueError("Record exceeds maximum supported move count")
     raw = dict(record)
     supplied_digest = raw.pop("digest", None)
     if not isinstance(supplied_digest, str) or _digest(raw) != supplied_digest:

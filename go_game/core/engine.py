@@ -24,6 +24,7 @@ class UndoToken:
     state_id: str
     sequence_after: int
     fingerprint_after: str
+    generation_after: int
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,7 @@ class GoState:
     _game: Game = field(repr=False)
     _actions: list = field(default_factory=list, repr=False)
     _id: str = field(default_factory=lambda: uuid.uuid4().hex, repr=False)
+    _generation: int = field(default=0, repr=False)
 
     @property
     def board(self):
@@ -125,7 +127,9 @@ class RulesEngine:
         if not ok:
             return MoveResult(False, reason)
         state._actions.append(action)
-        token = UndoToken(state._id, len(state._actions), state.fingerprint)
+        state._generation += 1
+        token = UndoToken(state._id, len(state._actions), state.fingerprint,
+                          state._generation)
         return MoveResult(True, reason, token)
 
     def apply_in_place(self, state, action):
@@ -137,11 +141,13 @@ class RulesEngine:
     def undo(self, state, token):
         if (not isinstance(token, UndoToken) or token.state_id != state._id
                 or token.sequence_after != len(state._actions)
-                or token.fingerprint_after != state.fingerprint):
+                or token.fingerprint_after != state.fingerprint
+                or token.generation_after != state._generation):
             raise ValueError("Stale or foreign undo token")
         if not state._game.undo():
             raise RuntimeError("Legacy game history unexpectedly empty")
         state._actions.pop()
+        state._generation += 1
 
     @staticmethod
     def clone(state):

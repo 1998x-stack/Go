@@ -41,6 +41,8 @@ class RuleSpec:
             ("scoring", "area_simple"), ("end_protocol", "two_pass_no_adjudication")
         )):
             raise ValueError("Unsupported rule configuration")
-        if not required.issubset(value):
-            raise ValueError("Missing rule configuration fields")
+        expected = required | {"schema", "ko_rule", "suicide", "scoring",
+                               "end_protocol"}
+        if set(value) != expected:
+            raise ValueError("Rule spec fields must match rules-v1 exactly")
         return cls(**{key: value[key] for key in required})
