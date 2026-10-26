@@ -93,3 +93,18 @@ jobs:
         run: python -m pip install 'numpy>=1.26,<3' 'gymnasium>=1.0,<2' 'pettingzoo>=1.25,<2'
       - name: Test Plan A core and optional adapters
         run: python -m unittest -v tests.test_rl_core tests.test_rl_adapters
+
+  selfplay-torch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pinned CPU PyTorch
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch==2.5.1'
+      - name: Verify Plan B model, search, data, checkpoint and Arena
+        run: python -m unittest -v tests.test_training_search tests.test_training_augmentation tests.test_training_torch
+      - name: Run end-to-end policy value self-play training smoke
+        run: python -m go_game.training.cli --size 2 --simulations 2 --games 1 --steps 1 --pairs 1 --max-moves 100 --output /tmp/go-plan-b-ci
