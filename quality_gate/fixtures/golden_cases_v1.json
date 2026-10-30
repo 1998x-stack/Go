@@ -1,0 +1,11 @@
+{
+  "schema": "go-golden-v1",
+  "cases": [
+    {"id":"empty_5","kind":"game","board_size":5,"komi_half_points":11,"actions":[],"expected":{"to_play":"X","terminated":false,"board":[".....",".....",".....",".....","....."],"legal_count":26,"black_captures":0,"white_captures":0}},
+    {"id":"first_move_5","kind":"game","board_size":5,"komi_half_points":11,"actions":[6],"expected":{"to_play":"O","terminated":false,"board":[".....",".X...",".....",".....","....."],"legal_count":25,"black_captures":0,"white_captures":0}},
+    {"id":"capture_cross_3","kind":"game","board_size":3,"komi_half_points":11,"actions":[4,1,9,3,9,5,9,7],"expected":{"to_play":"X","terminated":false,"board":[".O.","O.O",".O."],"legal_at":{"4":false},"black_captures":0,"white_captures":1}},
+    {"id":"double_pass_5","kind":"game","board_size":5,"komi_half_points":11,"actions":[25,25],"expected":{"to_play":"O","terminated":true,"winner":"O","black_score":0.0,"white_score":5.5}},
+    {"id":"manual_finish_sgf","kind":"sgf_manual_finish","board_size":5,"komi_half_points":11,"actions":[0],"expected":{"terminated_after_roundtrip":true}},
+    {"id":"terminal_recompute","kind":"terminal_recompute","board_size":5,"komi_half_points":11,"actions":[25,25],"expected":{"current_unchanged_after_recompute":true}}
+  ]
+}

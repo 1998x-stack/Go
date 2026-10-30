@@ -1,0 +1,9 @@
+# Runner image tools. Resolve and lock SHA-256 hashes before release.
+pytest==8.4.2
+ruff==0.14.3
+mypy==1.18.2
+# Full-repository UI and RL adapter E2E (version ranges align with upstream CI).
+pygame>=2.5,<3
+numpy>=1.26,<3
+gymnasium>=1.0,<2
+pettingzoo>=1.25,<2

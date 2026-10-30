@@ -1,0 +1,26 @@
+# Manual-only prototype: golden fixtures intentionally detect known legacy defects.
+# Enable PR/push triggers only after the defects and mandatory lanes are resolved.
+name: Go quality gate (manual prototype)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build trusted isolated runner image
+        run: docker build -t go-quality-runner:py311 -f quality_gate/Dockerfile .
+      - name: Isolated lanes
+        run: python -m quality_gate.runner --root . --out results --backend docker || true
+      - name: Independent evaluation
+        run: python -m quality_gate.evaluator --root . --report results/runner_report.json --out results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-evidence
+          path: results/
