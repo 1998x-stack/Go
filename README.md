@@ -5,7 +5,9 @@ a pygame desktop UI, a browser build (pygbag), and a simple built-in AI.
 
 ## Play
 
-Use the repository's GitHub Pages deployment for the browser version, or run
+The browser bundle is built by an automated `pygbag --build` Pages workflow.
+A successful build does not by itself prove gameplay on the deployed site.
+Use the repository's GitHub Pages deployment **after confirming the Pages workflow has succeeded**, or run
 locally with Python 3.9+:
 
 ```bash
